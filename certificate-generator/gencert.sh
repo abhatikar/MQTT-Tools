@@ -1,49 +1,40 @@
-#!/bin/bash
-set -e
-mkdir -p ~/myCA/signedcerts && mkdir ~/myCA/private 
+# This file generates the keys and certificates used for testing mosquitto.
+# None of the keys are encrypted, so do not just use this script to generate
+# files for your own use.
 
-cp caconfig.cnf ~/myCA
-cp exampleclient.cnf ~/myCA
-cp exampleserver.cnf ~/myCA
+rm -rf *.crt *.csr *.key rootCA/ signingCA/ *.pem
 
-cd ~/myCA
+for a in root signing; do
+	rm -rf ${a}CA/
+	mkdir -p ${a}CA/newcerts
+	touch ${a}CA/index.txt
+	echo 01 > ${a}CA/serial
+	echo 01 > ${a}CA/crlnumber
+done
+rm -rf certs
 
-echo '01' > serial  && touch index.txt
+BASESUBJ="/C=GB/ST=Derbyshire/L=Derby/O=Mosquitto Project/OU=Testing"
+SBASESUBJ="/C=GB/ST=Nottinghamshire/L=Nottingham/O=Server/OU=Production"
 
-export OPENSSL_CONF=~/myCA/caconfig.cnf
+# The root CA
+openssl genrsa -out test-root-ca.key 1024
+openssl req -new -x509 -days 3650 -key test-root-ca.key -out test-root-ca.crt -config openssl.cnf -subj "${BASESUBJ}/CN=Root CA/"
 
-openssl req -x509 -passout pass:rootkey -newkey rsa:2048 -out ~/myCA/cacert.pem -outform PEM -days 1825
+# An intermediate CA, signed by the root CA, used to sign server/client csrs.
+openssl genrsa -out test-signing-ca.key 1024
+openssl req -out test-signing-ca.csr -key test-signing-ca.key -new -config openssl.cnf -subj "${BASESUBJ}/CN=Signing CA/"
+openssl ca -config openssl.cnf -name CA_root -extensions v3_ca -out test-signing-ca.crt -infiles test-signing-ca.csr
 
-openssl x509 -in ~/myCA/cacert.pem -out ~/myCA/cacert.crt
+# Valid server key and certificate.
+openssl genrsa -out server.key 1024
+openssl req -new -key server.key -out server.csr -config openssl.cnf -subj "${SBASESUBJ}/CN=mqttserver/"
+openssl ca -config openssl.cnf -name CA_signing -out server.crt -infiles server.csr
 
-#Server Key
+# Valid client key and certificate.
+openssl genrsa -out client.key 1024
+openssl req -new -key client.key -out client.csr -config openssl.cnf -subj "${SBASESUBJ}/CN=mqttclient/"
+openssl ca -config openssl.cnf -name CA_signing -out client.crt -infiles client.csr
 
-export OPENSSL_CONF=~/myCA/exampleserver.cnf
-
-openssl req -passout pass:serverkey -newkey rsa:1024 -keyout ~/myCA/tempkey.pem -keyform PEM -out ~/myCA/tempreq.pem -outform PEM
-
-openssl rsa < ~/myCA/tempkey.pem > ~/myCA/server_key.pem -passin pass:serverkey
-
-mv ~/myCA/tempkey.pem ~/myCA/server_key.pem
-
-export OPENSSL_CONF=~/myCA/caconfig.cnf
-
-openssl ca -key rootkey -in ~/myCA/tempreq.pem -out ~/myCA/server_crt.pem
-
-rm -f ~/myCA/tempkey.pem && rm -f ~/myCA/tempreq.pem
-
-#Client Key
-
-export OPENSSL_CONF=~/myCA/exampleclient.cnf
-
-openssl req -passout pass:clientkey -newkey rsa:1024 -keyout ~/myCA/tempkey_c.pem -keyform PEM -out ~/myCA/tempreq_c.pem -outform PEM
-
-openssl rsa < ~/myCA/tempkey_c.pem > ~/myCA/client_key.pem -passin pass:clientkey
-
-mv ~/myCA/tempkey_c.pem ~/myCA/client_key.pem
-
-export OPENSSL_CONF=~/myCA/caconfig.cnf
-
-openssl ca -key rootkey -in ~/myCA/tempreq_c.pem -out ~/myCA/client_crt.pem
-
-rm -f ~/myCA/tempkey_c.pem && rm -f ~/myCA/tempreq_c.pem
+cat test-signing-ca.crt test-root-ca.crt > all-ca.crt
+cat client.crt client.key all-ca.crt > client.pem
+c_rehash certs
