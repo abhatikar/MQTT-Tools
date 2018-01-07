@@ -3,9 +3,6 @@
 # Replace set -e and exit with non-zero status if we experience a failure
 trap 'exit' ERR
 
-# Array of paths to try and use
-PATHS=( "1/etc/mosquitto/conf.d/" "1/etc/mosquitto/" )
-
 # Default location - overwritten with preceding path if one of them exists
 MOSQHOME=./mosquitto
 
@@ -15,40 +12,8 @@ MOSQCONF=mosquitto.conf
 # Time stamp format for backing up configuration files
 tstamp=$(date +%Y%m%d-%H%M%S)
 
-# Environment variable that can control who owns the files (passed to generate-CA.sh)
-MOSQUITTOUSER=${MOSQUITTOUSER:=$USER}
-
-# Iterate through array of paths to traverse for default location to use
-for i in "${PATHS[@]}"
-do
-	if [ -d $i ]; then
-		export MOSQHOME=$i
-		break
-	fi
-done
-
 # Fall back to default /tmp/mosquitto and create this location if it doesn't exist
 [ -d $MOSQHOME ] || mkdir $MOSQHOME
-
-# User that owns mosquitto directory that we're targeting
-MOSQUSER=`ls -ld $MOSQHOME | awk '{print $3}'`
-
-# Check ownership of the path and let us know if there's a permissions problem
-if [ $USER != $MOSQUSER ]; then
-	echo "FYI: File ownership for generated files in '${MOSQHOME}' is set to '${MOSQUITTOUSER}',"
-	echo "but you are running as '${USER}' and '${MOSQHOME}' can only be modified by '${MOSQUSER}'."
-	
-	if [ $MOSQUSER == 'root' ]; then
-		echo;
-		echo "The most easy way to fix this error is re-running as 'sudo ${0}'"
-	fi
-	
-	echo;
-	read -p "Press [Enter] key to continue, or [Ctrl]-C to cancel."
-fi
-
-# Export environment variable to be used in subsequent (generate-CA.sh)
-export MOSQUITTOUSER
 
 # Concat of path and configuration file
 MOSQPATH=$MOSQHOME/$MOSQCONF
@@ -91,8 +56,8 @@ sed -Ee 's/^[ 	]+%%% //' <<!ENDMOSQUITTOCONF > $MOSQPATH
 	%%% listener 1883 127.0.0.1
 	%%% 
 	%%% listener 8883
-	%%% tls_version tlsv1
-	%%% cafile $MOSQHOME/ca.crt
+	%%% tls_version tlsv1.2
+	%%% cafile $MOSQHOME/all-ca.crt
 	%%% certfile $MOSQHOME/server.crt
 	%%% keyfile $MOSQHOME/server.key
 	%%% require_certificate true
