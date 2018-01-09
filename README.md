@@ -1,32 +1,38 @@
 # MQTT-Tools
-1) Setup 2 ubuntu machines over vm with hostnames mqttserver and mqttclient respectively
+1) Setup 2 ubuntu VM machineswith hostnames mqttserver and mqttclient respectively
 
 2) Install mosquitto, mosquitto clients, OpenSSL and libs
 
-	sudo apt-add-repository ppa:mosquitto-dev/mosquitto-ppa
-
-	sudo apt-get update
-
 	sudo apt-get install openssl libssl-dev mosquitto mosquitto-clients
 
-4) Stop the broker
-	sudo stop mosquitto
+3) Stop the broker
 
-5) Modify the /etc/hosts file to add entries to client and server hostnames
+	sudo service mosquitto stop
 
-	127.0.0.1       localhost
-	127.0.1.1       mqttserver
-	192.168.56.102  mqttclient <---- Like this one
-
-	# The following lines are desirable for IPv6 capable hosts
-	::1     ip6-localhost ip6-loopback
-	fe00::0 ip6-localnet
-	ff00::0 ip6-mcastprefix
-	ff02::1 ip6-allnodes
-	ff02::2 ip6-allrouters
-
-6) Change to certificate-generator directory and run gencert.sh
+4) Change to certificate-generator directory and run gencert.sh
 
 	cd certificate-generator
 
-	./gencert.sh
+	./gencert.sh -c <client hostname/ip> -s <mqttbroker hostname/ip>
+
+	The certificates are generated in the results folder
+	Note: The client and server ip or hostname should be different else would lead to a openssl error
+
+5) Change to mosquitto-tools directory and run mosquitto-setup.sh
+
+	cd mosquitto-tools
+
+	./mosquitto-setup.sh
+
+	The configuration file is generated in the mosquitto folder.
+
+6) Finally, copy the certificates from the results folder from step 4 and mosquitto.conf into /etc/mosquitto
+
+	cd /etc/mosquitto
+	mv mosquitto.conf mosquitto.conf.bkup
+	cp results/* /etc/mosquitto
+	cp mosquitto/mosquitto.conf /etc/mosquitto
+
+7) Run the mosquitto broker
+
+	sudo mosquitto -c /etc/mosquitto.conf
